@@ -307,59 +307,49 @@ function escapeHtml(str){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+
+function copyText(text, btn){
+ const fallback=()=>{const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();showToast("Texto copiado.");};
+ if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(()=>showToast("Texto copiado.")).catch(fallback);} else fallback();
+ if(btn){const old=btn.innerHTML;btn.innerHTML="✓";setTimeout(()=>btn.innerHTML=old,1200);}
+}
+
 // ---------- Storage ----------
 async function loadFromStorage(){
   try{
-    const result = await window.storage.get(STORAGE_KEY, true);
-    if(result && result.value){
-      return JSON.parse(result.value);
-    }
-  }catch(e){
-    console.log('Nenhum dado encontrado ainda, semeando com dados iniciais.', e);
-  }
-  return null;
+    const result = localStorage.getItem(STORAGE_KEY);
+    return result ? JSON.parse(result) : null;
+  }catch(e){ return null; }
 }
 
 async function seedStorage(){
-  await window.storage.set(STORAGE_KEY, JSON.stringify(SEED_DATA), true);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA));
   return SEED_DATA;
 }
 
 async function persist(records){
-  setSyncStatus('syncing');
   try{
-    const result = await window.storage.set(STORAGE_KEY, JSON.stringify(records), true);
-    if(!result) throw new Error('Falha ao salvar');
-    setSyncStatus('synced');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     return true;
   }catch(e){
-    console.error(e);
-    setSyncStatus('error');
-    showToast('Não foi possível salvar as alterações. Tente novamente.', true);
+    showToast('Erro ao salvar dados.', true);
     return false;
   }
 }
 
 async function initialLoad(){
-  let data = await loadFromStorage();
-  if(!data || !Array.isArray(data) || data.length === 0){
-    data = await seedStorage();
+  const saved = await loadFromStorage();
+  if(saved && Array.isArray(saved)) allRecords = saved;
+  else {
+    allRecords = Array.isArray(SEED_DATA) ? SEED_DATA.map(r=>({...r})) : [];
+    await persist(allRecords);
   }
-  allRecords = data;
-  populateFilters();
+  filteredRecords = [...allRecords];
+  populateFilters(false);
   applyFilters();
-  setSyncStatus('synced');
 }
 
-async function silentRefresh(){
-  if(isModalOpen) return;
-  const data = await loadFromStorage();
-  if(data && Array.isArray(data)){
-    allRecords = data;
-    populateFilters(true);
-    applyFilters();
-  }
-}
+async function silentRefresh(){ return true; }
 
 // ---------- Filtering ----------
 function populateFilters(preserveSelection){
@@ -603,9 +593,9 @@ document.getElementById('filter-categoria').addEventListener('change', applyFilt
 document.getElementById('filter-tipo').addEventListener('change', applyFilters);
 document.getElementById('btn-new').addEventListener('click', () => openEditor(null));
 document.getElementById('btn-export').addEventListener('click', exportToXlsx);
-document.getElementById('btn-refresh').addEventListener('click', async () => {
-  showToast('Recarregando dados…');
-  await silentRefresh();
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  applyFilters();
+  showToast('Base atualizada na tela.');
 });
 
 document.getElementById('content').addEventListener('click', (e) => {
@@ -630,7 +620,6 @@ document.getElementById('content').addEventListener('click', (e) => {
 // ---------- Boot ----------
 (async function boot(){
   await initialLoad();
-  refreshTimer = setInterval(silentRefresh, 25000);
 })();
 </script>
 
