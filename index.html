@@ -243,28 +243,44 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- Cliente oficial do Supabase (banco de dados na nuvem, gratuito) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
 // =====================================================================
-// CONFIGURAÇÃO DO BANCO DE DADOS (Supabase)
-// Substitua os valores abaixo pelos dados do SEU projeto Supabase.
-// Veja o arquivo SETUP.md para o passo a passo completo.
+// CONFIGURAÇÃO (repositório público, sem token no navegador)
+// Leitura: arquivo JSON público via raw.githubusercontent.com
+// Gravação: abre uma Issue no repositório (sem credencial nenhuma);
+// uma GitHub Action processa a Issue e atualiza o JSON.
+// Veja o SETUP.md para o passo a passo completo.
 // =====================================================================
-const SUPABASE_URL = 'https://vtbahckdbfkgzhgjibgk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0YmFoY2tkYmZrZ3poZ2ppYmdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MjA5NjQsImV4cCI6MjEwMTA5Njk2NH0.8Pu4WACLP47Yshq4LtwHhfNo4LxV4zdDx64MlARI0l4';
-const TABLE_NAME = 'registros';
+const GITHUB_OWNER  = 'COLE_AQUI_SEU_USUARIO_OU_ORGANIZACAO';
+const GITHUB_REPO   = 'COLE_AQUI_O_NOME_DO_REPOSITORIO';
+const GITHUB_BRANCH = 'main';
+const GITHUB_PATH   = 'data/registros.json';
 
-let sb = null;
-function getClient(){
-  if(!sb){
-    if(!window.supabase || SUPABASE_URL.startsWith('COLE_AQUI')){
-      throw new Error('Supabase não configurado. Edite as constantes SUPABASE_URL e SUPABASE_ANON_KEY no início do <script>.');
-    }
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-  return sb;
+const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_PATH}`;
+const ISSUES_NEW_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/new`;
+
+function ghConfigured(){
+  return GITHUB_OWNER && !GITHUB_OWNER.startsWith('COLE_AQUI')
+      && GITHUB_REPO && !GITHUB_REPO.startsWith('COLE_AQUI');
+}
+
+async function ghGetFile(){
+  const res = await fetch(`${RAW_URL}?t=${Date.now()}`, { cache: 'no-store' });
+  if(res.status === 404) return { records: [] }; // arquivo ainda não existe
+  if(!res.ok) throw new Error(`Erro ${res.status} ao ler dados do GitHub.`);
+  let records = [];
+  try{ records = await res.json(); }catch(e){ records = []; }
+  return { records: Array.isArray(records) ? records : [] };
+}
+
+// Abre uma Issue pré-preenchida no GitHub; uma Action processa e grava.
+// Não requer nenhum token no navegador.
+function openWriteIssue(action, payload){
+  const title = `[dados] ${action}`;
+  const body = '```json\n' + JSON.stringify({ action, payload }, null, 2) + '\n```';
+  const url = `${ISSUES_NEW_URL}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=registro-automatico`;
+  const win = window.open(url, '_blank', 'noopener');
+  return !!win;
 }
 
 let allRecords = [];
@@ -334,83 +350,55 @@ function copyText(text, btn){
  if(btn){const old=btn.innerHTML;btn.innerHTML="✓";setTimeout(()=>btn.innerHTML=old,1200);}
 }
 
-// ---------- Storage (Supabase) ----------
-async function fetchAllRecords(){
+// ---------- Storage (leitura pública + gravação via Issue/Action) ----------
+// A gravação não é síncrona: abrimos uma Issue, uma GitHub Action processa
+// em segundo plano (geralmente poucos segundos) e fecha a Issue quando
+// termina. Por isso, após "salvar", ficamos de olho no arquivo até ele
+// refletir a mudança, sem exigir nenhum token no navegador.
+async function persist(action, payload, optimisticRecords){
   setSyncStatus('syncing');
-  try{
-    const { data, error } = await getClient()
-      .from(TABLE_NAME)
-      .select('*')
-      .order('id', { ascending: true });
-    if(error) throw error;
-    setSyncStatus('synced');
-    return data || [];
-  }catch(e){
-    console.error(e);
+  const opened = openWriteIssue(action, payload);
+  if(!opened){
     setSyncStatus('error');
-    showToast('Erro ao carregar dados do banco: ' + e.message, true);
-    return [];
-  }
-}
-
-async function insertRecord(record){
-  setSyncStatus('syncing');
-  try{
-    const { data, error } = await getClient()
-      .from(TABLE_NAME)
-      .insert([record])
-      .select();
-    if(error) throw error;
-    setSyncStatus('synced');
-    return data && data[0] ? data[0] : null;
-  }catch(e){
-    console.error(e);
-    setSyncStatus('error');
-    showToast('Erro ao cadastrar: ' + e.message, true);
-    return null;
-  }
-}
-
-async function updateRecord(id, fields){
-  setSyncStatus('syncing');
-  try{
-    const { error } = await getClient()
-      .from(TABLE_NAME)
-      .update(fields)
-      .eq('id', id);
-    if(error) throw error;
-    setSyncStatus('synced');
-    return true;
-  }catch(e){
-    console.error(e);
-    setSyncStatus('error');
-    showToast('Erro ao salvar alterações: ' + e.message, true);
+    showToast('O navegador bloqueou a janela da Issue. Permita pop-ups para este site e tente de novo.', true);
     return false;
   }
+  showToast('Gravando… isso pode levar alguns segundos (a Action está processando).');
+  allRecords = optimisticRecords; // atualiza a tela na hora, sem esperar a Action
+  const ok = await waitForSync(payload);
+  setSyncStatus(ok ? 'synced' : 'error');
+  if(!ok) showToast('A gravação está demorando mais que o esperado. Confira a aba Actions do repositório.', true);
+  return true;
 }
 
-async function deleteRecordDb(id){
-  setSyncStatus('syncing');
-  try{
-    const { error } = await getClient()
-      .from(TABLE_NAME)
-      .delete()
-      .eq('id', id);
-    if(error) throw error;
-    setSyncStatus('synced');
-    return true;
-  }catch(e){
-    console.error(e);
-    setSyncStatus('error');
-    showToast('Erro ao excluir: ' + e.message, true);
-    return false;
+// Consulta o JSON público a cada poucos segundos até detectar a mudança
+// esperada, ou desiste depois de um tempo (a gravação pode ainda estar
+// em andamento — os dados aparecerão assim que a Action terminar).
+async function waitForSync(expectedPayload, attempts=10, delayMs=3000){
+  for(let i=0;i<attempts;i++){
+    await new Promise(r => setTimeout(r, delayMs));
+    try{
+      const { records } = await ghGetFile();
+      const stillPending = expectedPayload && expectedPayload.id != null
+        ? !records.some(r => r.id === expectedPayload.id && JSON.stringify(r) === JSON.stringify(expectedPayload))
+        : false;
+      if(!stillPending){ allRecords = records; return true; }
+    }catch(e){ /* tenta de novo */ }
   }
+  return false;
 }
 
 async function initialLoad(){
+  setSyncStatus('syncing');
   try{
-    allRecords = await fetchAllRecords();
+    if(!ghConfigured()) throw new Error('GitHub não configurado. Edite as constantes no início do <script>.');
+    const { records } = await ghGetFile();
+    allRecords = records;
+    setSyncStatus('synced');
   }catch(e){
+    console.error(e);
+    setSyncStatus('error');
+    showToast('Erro ao carregar dados: ' + e.message, true);
     allRecords = [];
   }
   filteredRecords = [...allRecords];
@@ -579,20 +567,20 @@ function openEditor(record){
     saveBtn.disabled = true;
     saveBtn.textContent = 'Salvando…';
 
-    let ok = false;
+    let nextRecords, newRecord;
     if(isNew){
-      const created = await insertRecord({ categoria, tipo, tag, texto });
-      if(created){ allRecords.push(created); ok = true; }
+      const nextId = allRecords.length ? Math.max(...allRecords.map(r => Number(r.id) || 0)) + 1 : 1;
+      newRecord = { id: nextId, categoria, tipo, tag, texto };
+      nextRecords = [...allRecords, newRecord];
     } else {
-      ok = await updateRecord(record.id, { categoria, tipo, tag, texto });
-      if(ok){
-        const idx = allRecords.findIndex(r => r.id === record.id);
-        if(idx >= 0){ allRecords[idx] = { ...allRecords[idx], categoria, tipo, tag, texto }; }
-      }
+      newRecord = { ...record, categoria, tipo, tag, texto };
+      nextRecords = allRecords.map(r => r.id === record.id ? newRecord : r);
     }
 
+    const action = isNew ? 'create' : 'update';
+    const ok = await persist(action, newRecord, nextRecords);
     if(ok){
-      showToast(isNew ? 'Registro cadastrado.' : 'Alterações salvas.');
+      showToast(isNew ? 'Registro enviado — aparece assim que a Action gravar.' : 'Alteração enviada — aparece assim que a Action gravar.');
       populateFilters(true);
       applyFilters();
       close();
@@ -632,10 +620,10 @@ function openDeleteConfirm(id){
     if(action === 'confirm-delete'){
       const btn = e.target.closest('[data-action]');
       btn.disabled = true; btn.textContent = 'Excluindo…';
-      const ok = await deleteRecordDb(id);
+      const nextRecords = allRecords.filter(r => r.id !== id);
+      const ok = await persist('delete', { id }, nextRecords);
       if(ok){
-        allRecords = allRecords.filter(r => r.id !== id);
-        showToast('Registro excluído.');
+        showToast('Exclusão enviada — some da lista assim que a Action processar.');
         populateFilters(true);
         applyFilters();
         close();
@@ -666,10 +654,18 @@ document.getElementById('filter-tipo').addEventListener('change', applyFilters);
 document.getElementById('btn-new').addEventListener('click', () => openEditor(null));
 document.getElementById('btn-export').addEventListener('click', exportToXlsx);
 document.getElementById('btn-refresh').addEventListener('click', async () => {
-  allRecords = await fetchAllRecords();
-  populateFilters(true);
-  applyFilters();
-  showToast('Base atualizada a partir do banco de dados.');
+  setSyncStatus('syncing');
+  try{
+    const { records } = await ghGetFile();
+    allRecords = records;
+    setSyncStatus('synced');
+    populateFilters(true);
+    applyFilters();
+    showToast('Base atualizada a partir do GitHub.');
+  }catch(e){
+    setSyncStatus('error');
+    showToast('Erro ao atualizar: ' + e.message, true);
+  }
 });
 
 document.getElementById('content').addEventListener('click', (e) => {
