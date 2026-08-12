@@ -100,6 +100,35 @@
   .status-row .sync-info{ display:flex; align-items:center; gap:6px; }
   .dot{ width:7px; height:7px; border-radius:50%; background:var(--ok); display:inline-block; }
   .dot.stale{ background:#C9A227; }
+  .dot.error{ background: var(--danger); }
+  .dot.off{ background: var(--ink-faint); }
+
+  .connect-banner{
+    background: var(--accent-soft); border-bottom:1px solid var(--line);
+  }
+  .connect-banner-inner{
+    max-width:1080px; margin:0 auto; padding:12px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  }
+  .connect-banner-inner strong{ display:block; font-size:13.5px; color:var(--ink); }
+  .connect-banner-inner > div > span{ font-size:12px; color:var(--ink-soft); max-width:60ch; display:inline-block; }
+  .connect-form{ display:flex; gap:8px; flex-shrink:0; }
+  .connect-form input{
+    padding:9px 12px; border-radius:8px; border:1px solid var(--line);
+    background:var(--surface); color:var(--ink); font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    width:280px;
+  }
+  .connect-form input:focus{ outline:none; border-color:var(--accent); }
+
+  .conn-modal-body{ font-size:13.5px; color:var(--ink-soft); line-height:1.6; }
+  .conn-modal-body ol{ padding-left:20px; margin:10px 0; }
+  .conn-modal-body code{
+    background:var(--accent-soft); padding:1px 6px; border-radius:4px; font-family:'IBM Plex Mono', monospace; font-size:12px;
+  }
+  .conn-status-pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:5px 10px;
+    border-radius:20px; background:var(--accent-soft); color:var(--accent); margin-top:10px;
+  }
 
   .grid{ display:flex; flex-direction:column; gap:10px; }
 
@@ -212,12 +241,26 @@
       </div>
     </div>
     <div class="header-actions">
+      <button class="ghost" id="btn-connect" title="Conectar token do GitHub">🔒 Conectar</button>
       <button class="ghost" id="btn-refresh" title="Recarregar dados do servidor">↻ Atualizar</button>
       <button class="ghost" id="btn-export" title="Exportar para Excel">⇩ Exportar .xlsx</button>
       <button class="primary" id="btn-new">+ Novo registro</button>
     </div>
   </div>
 </header>
+
+<div class="connect-banner" id="connect-banner" style="display:none">
+  <div class="connect-banner-inner">
+    <div>
+      <strong>Conecte seu token do GitHub para poder editar.</strong>
+      <span>Sem isso, você só consegue visualizar os dados. O token fica salvo apenas neste navegador — nunca é enviado a nenhum lugar além do GitHub.</span>
+    </div>
+    <div class="connect-form">
+      <input type="password" id="token-input" placeholder="Cole seu token (ghp_… ou github_pat_…)">
+      <button class="primary" id="btn-save-token">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <main>
   <div class="toolbar">
@@ -243,45 +286,139 @@
 
 <div class="toast" id="toast"></div>
 
+
 <script>
 // =====================================================================
-// CONFIGURAÇÃO (repositório público, sem token no navegador)
-// Leitura: arquivo JSON público via raw.githubusercontent.com
-// Gravação: abre uma Issue no repositório (sem credencial nenhuma);
-// uma GitHub Action processa a Issue e atualiza o JSON.
-// Veja o SETUP.md para o passo a passo completo.
+// CONFIGURAÇÃO (arquivo JSON dentro deste repositório GitHub)
+// GITHUB_OWNER / GITHUB_REPO / GITHUB_PATH não são segredo — identificam
+// só onde os dados ficam. O TOKEN de acesso NUNCA fica escrito aqui:
+// cada pessoa cola o próprio token na hora de usar, e ele fica salvo
+// somente no localStorage do navegador dela. Veja o SETUP.md.
 // =====================================================================
-const GITHUB_OWNER  = 'reinvestimentoinfrasul';
-const GITHUB_REPO   = 'home';
+const GITHUB_OWNER  = 'COLE_AQUI_SEU_USUARIO_OU_ORGANIZACAO';
+const GITHUB_REPO   = 'COLE_AQUI_O_NOME_DO_REPOSITORIO';
 const GITHUB_BRANCH = 'main';
 const GITHUB_PATH   = 'data/registros.json';
 
-const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_PATH}`;
-const ISSUES_NEW_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/new`;
+const GITHUB_API = 'https://api.github.com';
+const TOKEN_STORAGE_KEY = 'cpt_github_token';
+let currentSha = null; // sha do arquivo no GitHub, necessário para cada gravação
 
-function ghConfigured(){
+function repoConfigured(){
   return GITHUB_OWNER && !GITHUB_OWNER.startsWith('COLE_AQUI')
       && GITHUB_REPO && !GITHUB_REPO.startsWith('COLE_AQUI');
 }
 
-async function ghGetFile(){
-  const res = await fetch(`${RAW_URL}?t=${Date.now()}`, { cache: 'no-store' });
-  if(res.status === 404) return { records: [] }; // arquivo ainda não existe
-  if(!res.ok) throw new Error(`Erro ${res.status} ao ler dados do GitHub.`);
-  let records = [];
-  try{ records = await res.json(); }catch(e){ records = []; }
-  return { records: Array.isArray(records) ? records : [] };
+function getToken(){
+  try{ return localStorage.getItem(TOKEN_STORAGE_KEY) || ''; }catch(e){ return ''; }
+}
+function setToken(tok){
+  try{ localStorage.setItem(TOKEN_STORAGE_KEY, tok); }catch(e){}
+}
+function clearToken(){
+  try{ localStorage.removeItem(TOKEN_STORAGE_KEY); }catch(e){}
+}
+function hasToken(){ return !!getToken(); }
+
+function b64EncodeUnicode(str){
+  return btoa(new TextEncoder().encode(str).reduce((s,b)=>s+String.fromCharCode(b), ''));
+}
+function b64DecodeUnicode(b64){
+  const bin = atob(b64.replace(/\n/g, ''));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder('utf-8').decode(bytes);
 }
 
-// Abre uma Issue pré-preenchida no GitHub; uma Action processa e grava.
-// Não requer nenhum token no navegador.
-function openWriteIssue(action, payload){
-  const title = `[dados] ${action}`;
-  const body = '```json\n' + JSON.stringify({ action, payload }, null, 2) + '\n```';
-  const url = `${ISSUES_NEW_URL}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=registro-automatico`;
-  const win = window.open(url, '_blank', 'noopener');
-  return !!win;
+// Leitura: funciona mesmo sem token, já que o repositório é público.
+// Se houver token salvo, usamos ele mesmo assim (evita cache e dá limite
+// de requisições maior).
+async function ghGetFile(){
+  const url = `${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}?ref=${GITHUB_BRANCH}&t=${Date.now()}`;
+  const headers = { 'Accept': 'application/vnd.github+json' };
+  const tok = getToken();
+  if(tok) headers['Authorization'] = `Bearer ${tok}`;
+  const res = await fetch(url, { headers });
+  if(res.status === 404) return { records: [], sha: null }; // arquivo ainda não existe
+  if(!res.ok) throw new Error(`GitHub API ${res.status}: ${(await res.json().catch(()=>({})))?.message || res.statusText}`);
+  const json = await res.json();
+  currentSha = json.sha;
+  const text = b64DecodeUnicode(json.content);
+  let records = [];
+  try{ records = JSON.parse(text); }catch(e){ records = []; }
+  return { records: Array.isArray(records) ? records : [], sha: json.sha };
 }
+
+// Gravação: exige token salvo localmente (é a única forma de autorizar escrita).
+async function ghPutFile(records, message){
+  const tok = getToken();
+  if(!tok) throw new Error('Conecte seu token do GitHub para poder salvar (botão "Conectar" no topo).');
+  const url = `${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`;
+  const body = {
+    message,
+    content: b64EncodeUnicode(JSON.stringify(records, null, 2)),
+    branch: GITHUB_BRANCH
+  };
+  if(currentSha) body.sha = currentSha;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${tok}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok){
+    const errJson = await res.json().catch(()=>({}));
+    if(res.status === 401){
+      clearToken();
+      updateConnectUI();
+      throw new Error('Token inválido ou expirado. Conecte de novo com o botão "Conectar".');
+    }
+    if(res.status === 409) throw new Error('Conflito: alguém mais salvou dados enquanto você editava. Clique em Atualizar e tente de novo.');
+    throw new Error(`GitHub API ${res.status}: ${errJson.message || res.statusText}`);
+  }
+  const json = await res.json();
+  currentSha = json.content.sha;
+  return true;
+}
+
+// ---------- Conexão (token local) ----------
+function updateConnectUI(){
+  const connected = hasToken();
+  const banner = document.getElementById('connect-banner');
+  const btn = document.getElementById('btn-connect');
+  banner.style.display = connected ? 'none' : 'flex';
+  btn.textContent = connected ? '🔓 Conectado' : '🔒 Conectar';
+  btn.title = connected ? 'Clique para desconectar este navegador' : 'Conectar token do GitHub';
+}
+
+document.getElementById('btn-save-token').addEventListener('click', () => {
+  const input = document.getElementById('token-input');
+  const val = input.value.trim();
+  if(!val){ showToast('Cole um token válido.', true); return; }
+  setToken(val);
+  input.value = '';
+  updateConnectUI();
+  showToast('Token conectado neste navegador.');
+});
+
+document.getElementById('token-input').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('btn-save-token').click();
+});
+
+document.getElementById('btn-connect').addEventListener('click', () => {
+  if(hasToken()){
+    if(confirm('Desconectar este navegador? Você vai precisar colar o token de novo para editar.')){
+      clearToken();
+      updateConnectUI();
+      showToast('Desconectado deste navegador.');
+    }
+  } else {
+    document.getElementById('token-input').focus();
+    document.getElementById('connect-banner').scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+});
 
 let allRecords = [];
 let filteredRecords = [];
@@ -350,48 +487,27 @@ function copyText(text, btn){
  if(btn){const old=btn.innerHTML;btn.innerHTML="✓";setTimeout(()=>btn.innerHTML=old,1200);}
 }
 
-// ---------- Storage (leitura pública + gravação via Issue/Action) ----------
-// A gravação não é síncrona: abrimos uma Issue, uma GitHub Action processa
-// em segundo plano (geralmente poucos segundos) e fecha a Issue quando
-// termina. Por isso, após "salvar", ficamos de olho no arquivo até ele
-// refletir a mudança, sem exigir nenhum token no navegador.
-async function persist(action, payload, optimisticRecords){
+// ---------- Storage (arquivo JSON no GitHub) ----------
+async function persist(records){
   setSyncStatus('syncing');
-  const opened = openWriteIssue(action, payload);
-  if(!opened){
+  try{
+    if(!repoConfigured()) throw new Error('Repositório não configurado. Edite GITHUB_OWNER/GITHUB_REPO no início do <script>.');
+    await ghPutFile(records, 'Atualiza registros via Central de Padrões Técnicos');
+    setSyncStatus('synced');
+    return true;
+  }catch(e){
+    console.error(e);
     setSyncStatus('error');
-    showToast('O navegador bloqueou a janela da Issue. Permita pop-ups para este site e tente de novo.', true);
+    showToast('Erro ao salvar: ' + e.message, true);
     return false;
   }
-  showToast('Gravando… isso pode levar alguns segundos (a Action está processando).');
-  allRecords = optimisticRecords; // atualiza a tela na hora, sem esperar a Action
-  const ok = await waitForSync(payload);
-  setSyncStatus(ok ? 'synced' : 'error');
-  if(!ok) showToast('A gravação está demorando mais que o esperado. Confira a aba Actions do repositório.', true);
-  return true;
-}
-
-// Consulta o JSON público a cada poucos segundos até detectar a mudança
-// esperada, ou desiste depois de um tempo (a gravação pode ainda estar
-// em andamento — os dados aparecerão assim que a Action terminar).
-async function waitForSync(expectedPayload, attempts=10, delayMs=3000){
-  for(let i=0;i<attempts;i++){
-    await new Promise(r => setTimeout(r, delayMs));
-    try{
-      const { records } = await ghGetFile();
-      const stillPending = expectedPayload && expectedPayload.id != null
-        ? !records.some(r => r.id === expectedPayload.id && JSON.stringify(r) === JSON.stringify(expectedPayload))
-        : false;
-      if(!stillPending){ allRecords = records; return true; }
-    }catch(e){ /* tenta de novo */ }
-  }
-  return false;
 }
 
 async function initialLoad(){
+  updateConnectUI();
   setSyncStatus('syncing');
   try{
-    if(!ghConfigured()) throw new Error('GitHub não configurado. Edite as constantes no início do <script>.');
+    if(!repoConfigured()) throw new Error('Repositório não configurado. Edite GITHUB_OWNER/GITHUB_REPO no início do <script>.');
     const { records } = await ghGetFile();
     allRecords = records;
     setSyncStatus('synced');
@@ -500,6 +616,12 @@ function render(){
 
 // ---------- Modal: Add/Edit ----------
 function openEditor(record){
+  if(!hasToken()){
+    showToast('Conecte seu token do GitHub antes de editar (botão "Conectar" no topo).', true);
+    document.getElementById('connect-banner').scrollIntoView({ behavior:'smooth', block:'center' });
+    document.getElementById('token-input').focus();
+    return;
+  }
   isModalOpen = true;
   const isNew = !record;
   const overlay = document.createElement('div');
@@ -567,20 +689,18 @@ function openEditor(record){
     saveBtn.disabled = true;
     saveBtn.textContent = 'Salvando…';
 
-    let nextRecords, newRecord;
+    let nextRecords;
     if(isNew){
       const nextId = allRecords.length ? Math.max(...allRecords.map(r => Number(r.id) || 0)) + 1 : 1;
-      newRecord = { id: nextId, categoria, tipo, tag, texto };
-      nextRecords = [...allRecords, newRecord];
+      nextRecords = [...allRecords, { id: nextId, categoria, tipo, tag, texto }];
     } else {
-      newRecord = { ...record, categoria, tipo, tag, texto };
-      nextRecords = allRecords.map(r => r.id === record.id ? newRecord : r);
+      nextRecords = allRecords.map(r => r.id === record.id ? { ...r, categoria, tipo, tag, texto } : r);
     }
 
-    const action = isNew ? 'create' : 'update';
-    const ok = await persist(action, newRecord, nextRecords);
+    const ok = await persist(nextRecords);
     if(ok){
-      showToast(isNew ? 'Registro enviado — aparece assim que a Action gravar.' : 'Alteração enviada — aparece assim que a Action gravar.');
+      allRecords = nextRecords;
+      showToast(isNew ? 'Registro cadastrado.' : 'Alterações salvas.');
       populateFilters(true);
       applyFilters();
       close();
@@ -592,6 +712,12 @@ function openEditor(record){
 }
 
 function openDeleteConfirm(id){
+  if(!hasToken()){
+    showToast('Conecte seu token do GitHub antes de excluir (botão "Conectar" no topo).', true);
+    document.getElementById('connect-banner').scrollIntoView({ behavior:'smooth', block:'center' });
+    document.getElementById('token-input').focus();
+    return;
+  }
   isModalOpen = true;
   const record = allRecords.find(r => r.id === id);
   if(!record) { isModalOpen = false; return; }
@@ -621,9 +747,10 @@ function openDeleteConfirm(id){
       const btn = e.target.closest('[data-action]');
       btn.disabled = true; btn.textContent = 'Excluindo…';
       const nextRecords = allRecords.filter(r => r.id !== id);
-      const ok = await persist('delete', { id }, nextRecords);
+      const ok = await persist(nextRecords);
       if(ok){
-        showToast('Exclusão enviada — some da lista assim que a Action processar.');
+        allRecords = nextRecords;
+        showToast('Registro excluído.');
         populateFilters(true);
         applyFilters();
         close();
