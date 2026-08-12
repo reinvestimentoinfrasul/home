@@ -1,12 +1,5 @@
 [
   {
-    "id": 1,
-    "categoria": "TESTE",
-    "tipo": "TESTE",
-    "tag": "",
-    "texto": "TESTE"
-  },
-  {
     "id": 2,
     "categoria": "Teste2",
     "tipo": "",
