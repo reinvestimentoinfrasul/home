@@ -1,0 +1,104 @@
+name: Gravar registro a partir da Issue
+
+# Dispara sempre que uma Issue é aberta com o rótulo "registro-automatico"
+# (é isso que o site faz ao criar/editar/excluir um registro).
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  gravar:
+    if: contains(github.event.issue.labels.*.name, 'registro-automatico')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Processar Issue e atualizar registros.json
+        id: processa
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'data/registros.json';
+
+            // Extrai o bloco ```json ... ``` do corpo da issue
+            const body = context.payload.issue.body || '';
+            const match = body.match(/```json\s*([\s\S]*?)```/);
+            if(!match){
+              throw new Error('Não encontrei um bloco ```json``` no corpo da issue.');
+            }
+            const parsed = JSON.parse(match[1]);
+            const { action, payload } = parsed;
+
+            let records = [];
+            try{
+              records = JSON.parse(fs.readFileSync(path, 'utf8'));
+              if(!Array.isArray(records)) records = [];
+            }catch(e){
+              records = [];
+            }
+
+            if(action === 'create'){
+              records = records.filter(r => r.id !== payload.id);
+              records.push(payload);
+            } else if(action === 'update'){
+              records = records.map(r => r.id === payload.id ? payload : r);
+            } else if(action === 'delete'){
+              records = records.filter(r => r.id !== payload.id);
+            } else {
+              throw new Error(`Ação desconhecida: ${action}`);
+            }
+
+            records.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+            fs.mkdirSync('data', { recursive: true });
+            fs.writeFileSync(path, JSON.stringify(records, null, 2) + '\n', 'utf8');
+
+            core.setOutput('action', action);
+            core.setOutput('record_id', payload.id ?? '');
+
+      - name: Commitar alteração
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/registros.json
+          if git diff --cached --quiet; then
+            echo "Nada para commitar."
+          else
+            git commit -m "chore: ${{ steps.processa.outputs.action }} registro #${{ steps.processa.outputs.record_id }} (issue #${{ github.event.issue.number }})"
+            git push
+          fi
+
+      - name: Fechar a issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              state: 'closed'
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: '✅ Registro processado e gravado em `data/registros.json`.'
+            });
+
+      - name: Comentar erro (se falhar)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: '❌ Não consegui processar esta issue automaticamente. Confira a aba **Actions** para ver o erro, ou edite `data/registros.json` manualmente.'
+            });
