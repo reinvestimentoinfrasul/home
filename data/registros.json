@@ -12,5 +12,12 @@
     "tipo": "",
     "tag": "",
     "texto": "Sr Fornecedor,\n\nSegue orçamento aprovado no valor de R$ XX.XXX,XX\n\nFavor seguir para agendamento com a dependência, execução e posteriormente envio dos documentos abaixo, para fiscalização e conformidade da RAT.\n- Relatório de Conclusão;\n- Laudos e ARTs pertinentes."
+  },
+  {
+    "id": 3,
+    "categoria": "SCAP",
+    "tipo": "Demanda Concluída",
+    "tag": "",
+    "texto": "Serviço concluído.\n\nSe nosso trabalho te apoiou conforme necessidade apontada e com suporte eficiente, será muito valioso ver isso refletido em sua avaliação. Reforçamos que a avaliação é sobre nosso atendimento e não para empresa de engenharia contratada.\n\nContamos com sua colaboração para fortalecer continuamente a qualidade dos nossos processos.\n\nCESUP Infra Rede Sul"
   }
 ]
