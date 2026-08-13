@@ -40,5 +40,12 @@
     "tipo": "",
     "tag": "#Acesso",
     "texto": "Sr Gerente, bom dia!\n\nFavor conceder acesso ao fornecedor de carro engenharia, conforme abaixo para levantamento dos serviços de ......."
+  },
+  {
+    "id": 7,
+    "categoria": "Orçamento",
+    "tipo": "",
+    "tag": "#orçamento",
+    "texto": "Relatório/Orçamento analisados e aprovados.\n\nFavor proceder à execução do serviço."
   }
 ]
