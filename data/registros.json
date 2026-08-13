@@ -3,7 +3,7 @@
     "id": 1,
     "categoria": "Orçamento",
     "tipo": "Negociação",
-    "tag": "",
+    "tag": "#orçamento",
     "texto": "Sr Fornecedor,\n\nSegue orçamento aprovado no valor de R$ XXX.XXX,XX\n\n- Itens de limpeza e administração de obras alterados conforme DOCUMENTO Nº 11 DO CONTRATO;\n- Remoção de entulho alterado para 1 caçamba.\n- Para itens reprovados, colocar o cursor do mouse sobre o X para verificar a justificativa.\n\nCaso discorde dos valores, favor apresentar as devidas justificativas pertinentes juntamente do memorial de cálculo do item discordado. Se houver concordância com o valor aprovado, favor seguir para agendamento com a dependência, execução e posteriormente envio do relatório de conclusão, laudos e ARTs pertinentes."
   },
   {
