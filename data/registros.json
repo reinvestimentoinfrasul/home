@@ -11,7 +11,7 @@
     "categoria": "Orçamento",
     "tipo": "Aprovado",
     "tag": "#orçamento",
-    "texto": "Sr Fornecedor,\n\nSegue orçamento aprovado no valor de R$ XX.XXX,XX\n\nFavor seguir para agendamento com a dependência, execução e posteriormente envio dos documentos abaixo, para fiscalização e conformidade da RAT.\n- Relatório de Conclusão;\n- Laudos e ARTs pertinentes."
+    "texto": "Sr Fornecedor,\n\nSegue orçamento aprovado no valor de R$ XX.XXX,XX\n\nCaso concorde com a aprovação, favor inserir os itens na aba orçamento para aprovação, agendamento com a dependência, execução e posteriormente envio dos documentos abaixo para fiscalização e conformidade da RAT:\n\n- Relatório de Conclusão;\n- Laudos e ARTs pertinentes."
   },
   {
     "id": 3,
