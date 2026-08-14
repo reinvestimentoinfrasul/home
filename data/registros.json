@@ -47,5 +47,12 @@
     "tipo": "",
     "tag": "#orçamento",
     "texto": "Relatório/Orçamento analisados e aprovados.\n\nFavor proceder à execução do serviço."
+  },
+  {
+    "id": 8,
+    "categoria": "Carro Engenharia",
+    "tipo": "",
+    "tag": "#carroengenharia",
+    "texto": "Conforme edital, os custos de transportes estão inerentes ao preço licitado, exceto para vistoria"
   }
 ]
