@@ -82,5 +82,12 @@
     "tipo": "teste",
     "tag": "",
     "texto": "teste"
+  },
+  {
+    "id": 13,
+    "categoria": "Teste3",
+    "tipo": "",
+    "tag": "",
+    "texto": "TESTE\nTESTE"
   }
 ]
