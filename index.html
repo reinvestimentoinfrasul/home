@@ -160,18 +160,12 @@
   }
   .icon-btn:hover{ background:var(--accent-soft); color:var(--accent); }
   .icon-btn.del:hover{ background:var(--danger-soft); color:var(--danger); }
+  .icon-btn.copy{ color:#1E9E5A; }
+  .icon-btn.copy:hover{ background:#E4F6EC; color:#178049; }
 
   .card-text{
     font-size:13.8px; color:var(--ink); white-space:pre-wrap; line-height:1.55;
   }
-  .card-text.clamped{
-    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
-  }
-  .expand-link{
-    font-size:12.5px; color:var(--accent); background:none; border:none; padding:6px 0 0; font-weight:500;
-    cursor:pointer;
-  }
-
   .empty-state{
     text-align:center; padding: 60px 20px; color:var(--ink-soft);
   }
@@ -422,7 +416,6 @@ document.getElementById('btn-connect').addEventListener('click', () => {
 
 let allRecords = [];
 let filteredRecords = [];
-let expandedIds = new Set();
 let isModalOpen = false;
 let refreshTimer = null;
 
@@ -580,8 +573,6 @@ function render(){
 
   const html = filteredRecords.map(r => {
     const style = catStyle(r.categoria);
-    const expanded = expandedIds.has(r.id);
-    const isLong = (r.texto || '').length > 220;
     return `
       <div class="card" data-id="${r.id}">
         <div class="card-tab" style="background:${style.tab}"></div>
@@ -594,7 +585,7 @@ function render(){
               ${r.tag ? `<span class="tag-chip">${escapeHtml(r.tag)}</span>` : ''}
             </div>
             <div class="card-actions">
-              <button class="icon-btn" data-action="copy" data-id="${r.id}" title="Copiar texto">
+              <button class="icon-btn copy" data-action="copy" data-id="${r.id}" title="Copiar texto">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
               <button class="icon-btn" data-action="edit" data-id="${r.id}" title="Editar">
@@ -605,8 +596,7 @@ function render(){
               </button>
             </div>
           </div>
-          <div class="card-text ${isLong && !expanded ? 'clamped' : ''}">${escapeHtml(r.texto)}</div>
-          ${isLong ? `<button class="expand-link" data-action="toggle" data-id="${r.id}">${expanded ? 'ver menos' : 'ver mais'}</button>` : ''}
+          <div class="card-text">${escapeHtml(r.texto)}</div>
         </div>
       </div>`;
   }).join('');
@@ -808,9 +798,6 @@ document.getElementById('content').addEventListener('click', (e) => {
     if(record) openEditor(record);
   } else if(action === 'delete'){
     openDeleteConfirm(id);
-  } else if(action === 'toggle'){
-    if(expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
-    render();
   }
 });
 
