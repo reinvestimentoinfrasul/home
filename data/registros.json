@@ -68,5 +68,12 @@
     "tipo": "",
     "tag": "#tri",
     "texto": "Enzo, favor deferir a alteração pontual no trabalho remoto institucional."
+  },
+  {
+    "id": 11,
+    "categoria": "Liberação de Parcela",
+    "tipo": "",
+    "tag": "#parcela",
+    "texto": "Nos termos da IN 342, atesto que o serviço foi prestado a contento,\nde acordo com as condições definidas pelo contrato e autorizo o pagamento desta parcela.\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\nMulta:\t ( ) Sim\t(x) Não\nUltima Parcela: ( ) Sim\t (X) Não"
   }
 ]
