@@ -82,5 +82,12 @@
     "tipo": "",
     "tag": "#jogajunto",
     "texto": "Está sempre disposto a auxiliar nas demandas de engenharia elétrica. Seu foco no cliente agrega muito à equipe."
+  },
+  {
+    "id": 13,
+    "categoria": "Orçamento",
+    "tipo": "",
+    "tag": "#orcamento",
+    "texto": "Sr. Fornecedor,\n\nSegue orçamento aprovado no valor de R$ XX.XXX,XX\n\nFavor agendar com a dependência a execução e posteriormente fazer o envio dos documentos abaixo para fiscalização e conformidade da RAT:\n\n- Relatório de Conclusão;\n- Laudos e ARTs pertinentes."
   }
 ]
