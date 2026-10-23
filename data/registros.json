@@ -89,5 +89,12 @@
     "tipo": "",
     "tag": "#orcamento",
     "texto": "Sr. Fornecedor,\n\nSegue orçamento aprovado no valor de R$ XX.XXX,XX\n\nFavor agendar com a dependência a execução e posteriormente fazer o envio dos documentos abaixo para fiscalização e conformidade da RAT:\n\n- Relatório de Conclusão;\n- Laudos e ARTs pertinentes."
+  },
+  {
+    "id": 14,
+    "categoria": "SESMT",
+    "tipo": "SPDA",
+    "tag": "#SPDA",
+    "texto": "Correção e laudo SPDA, objeto de apontamento do SESMT. Risco legal e de descargas atmosféricas."
   }
 ]
