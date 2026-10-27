@@ -96,12 +96,5 @@
     "tipo": "SPDA",
     "tag": "#SPDA",
     "texto": "Correção e laudo SPDA, objeto de apontamento do SESMT. Risco legal e de descargas atmosféricas."
-  },
-  {
-    "id": 15,
-    "categoria": "TESTE",
-    "tipo": "TESTE",
-    "tag": "TESTE",
-    "texto": "TESTE"
   }
 ]
