@@ -106,22 +106,12 @@
   .dot.error{ background: var(--danger); }
   .dot.off{ background: var(--ink-faint); }
 
-  .connect-banner{
-    background: var(--accent-soft); border-bottom:1px solid var(--line);
+  .connect-input{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line);
+    background:var(--bg); color:var(--ink); font-family:'IBM Plex Mono', monospace; font-size:13px;
   }
-  .connect-banner-inner{
-    max-width:1080px; margin:0 auto; padding:12px 24px;
-    display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
-  }
-  .connect-banner-inner strong{ display:block; font-size:13.5px; color:var(--ink); }
-  .connect-banner-inner > div > span{ font-size:12px; color:var(--ink-soft); max-width:60ch; display:inline-block; }
-  .connect-form{ display:flex; gap:8px; flex-shrink:0; }
-  .connect-form input{
-    padding:9px 12px; border-radius:8px; border:1px solid var(--line);
-    background:var(--surface); color:var(--ink); font-family:'IBM Plex Mono', monospace; font-size:12.5px;
-    width:280px;
-  }
-  .connect-form input:focus{ outline:none; border-color:var(--accent); }
+  .connect-input:focus{ outline:none; border-color:var(--accent); background:var(--surface); }
+  .connect-desc{ margin:0; font-size:13.5px; color:var(--ink-soft); line-height:1.55; }
 
   .conn-modal-body{ font-size:13.5px; color:var(--ink-soft); line-height:1.6; }
   .conn-modal-body ol{ padding-left:20px; margin:10px 0; }
@@ -245,19 +235,6 @@
     </div>
   </div>
 </header>
-
-<div class="connect-banner" id="connect-banner" style="display:none">
-  <div class="connect-banner-inner">
-    <div>
-      <strong>Conecte seu token do GitHub para poder editar.</strong>
-      <span>Sem isso, você só consegue visualizar os dados. O token fica salvo apenas neste navegador — nunca é enviado a nenhum lugar além do GitHub.</span>
-    </div>
-    <div class="connect-form">
-      <input type="password" id="token-input" placeholder="Cole seu token (ghp_… ou github_pat_…)">
-      <button class="primary" id="btn-save-token">Salvar</button>
-    </div>
-  </div>
-</div>
 
 <main>
   <div class="toolbar">
@@ -383,26 +360,60 @@ async function ghPutFile(records, message){
 // ---------- Conexão (token local) ----------
 function updateConnectUI(){
   const connected = hasToken();
-  const banner = document.getElementById('connect-banner');
   const btn = document.getElementById('btn-connect');
-  banner.style.display = connected ? 'none' : 'flex';
   btn.textContent = connected ? '🔓 Conectado' : '🔒 Conectar';
   btn.title = connected ? 'Clique para desconectar este navegador' : 'Conectar token do GitHub';
 }
 
-document.getElementById('btn-save-token').addEventListener('click', () => {
-  const input = document.getElementById('token-input');
-  const val = input.value.trim();
-  if(!val){ showToast('Cole um token válido.', true); return; }
-  setToken(val);
-  input.value = '';
-  updateConnectUI();
-  showToast('Token conectado neste navegador.');
-});
+function openConnectModal(){
+  if(document.getElementById('connect-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'connect-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px" role="dialog" aria-modal="true" aria-labelledby="connect-title">
+      <div class="modal-header">
+        <h2 id="connect-title">Conectar token do GitHub</h2>
+        <button class="ghost" data-action="close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="connect-desc">Sem o token, você só consegue visualizar os dados. O token fica salvo apenas neste navegador — nunca é enviado a nenhum lugar além do GitHub.</p>
+        <input type="password" id="token-input" class="connect-input" placeholder="Cole seu token (ghp_… ou github_pat_…)" autocomplete="off">
+      </div>
+      <div class="modal-footer">
+        <button class="ghost" data-action="close">Cancelar</button>
+        <button class="primary" data-action="save-token">Salvar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector('#token-input');
+  input.focus();
 
-document.getElementById('token-input').addEventListener('keydown', (e) => {
-  if(e.key === 'Enter') document.getElementById('btn-save-token').click();
-});
+  function close(){
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  function save(){
+    const val = input.value.trim();
+    if(!val){ showToast('Cole um token válido.', true); return; }
+    setToken(val);
+    updateConnectUI();
+    close();
+    showToast('Token conectado neste navegador.');
+  }
+  function onKey(e){
+    if(e.key === 'Escape') close();
+    if(e.key === 'Enter' && document.activeElement === input) save();
+  }
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('click', (e) => {
+    if(e.target === overlay) return close();
+    const action = e.target.closest('[data-action]')?.dataset.action;
+    if(action === 'close') close();
+    if(action === 'save-token') save();
+  });
+}
 
 document.getElementById('btn-connect').addEventListener('click', () => {
   if(hasToken()){
@@ -412,8 +423,7 @@ document.getElementById('btn-connect').addEventListener('click', () => {
       showToast('Desconectado deste navegador.');
     }
   } else {
-    document.getElementById('token-input').focus();
-    document.getElementById('connect-banner').scrollIntoView({ behavior:'smooth', block:'center' });
+    openConnectModal();
   }
 });
 
@@ -611,8 +621,7 @@ function render(){
 function openEditor(record){
   if(!hasToken()){
     showToast('Conecte seu token do GitHub antes de editar (botão "Conectar" no topo).', true);
-    document.getElementById('connect-banner').scrollIntoView({ behavior:'smooth', block:'center' });
-    document.getElementById('token-input').focus();
+    openConnectModal();
     return;
   }
   isModalOpen = true;
@@ -707,8 +716,7 @@ function openEditor(record){
 function openDeleteConfirm(id){
   if(!hasToken()){
     showToast('Conecte seu token do GitHub antes de excluir (botão "Conectar" no topo).', true);
-    document.getElementById('connect-banner').scrollIntoView({ behavior:'smooth', block:'center' });
-    document.getElementById('token-input').focus();
+    openConnectModal();
     return;
   }
   isModalOpen = true;
